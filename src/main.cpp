@@ -13,6 +13,11 @@ int32_t laser2Time = 0;
 int8_t laser2Power = 0;
 int32_t laser2Delay = 0;
 
+bool power_state = false;
+int32_t power_timer = 0;
+int32_t max_time = 0;
+
+
 String _receivedString = "";
 bool _isStringComplete = false;
 
@@ -29,12 +34,15 @@ void setup() {
   Serial.println("Bi-Laser System");
   loadParameterFromEEPROM();
 
+  if(laser1Time > laser2Time)
+    max_time = laser1Time;
+  else
+    max_time = laser2Time;
+
   pinMode(DOOR_INPUT, INPUT);
 
-  pinMode(POWER1_SGNL, OUTPUT);
-  digitalWrite(POWER1_SGNL, 0);
-  pinMode(POWER2_SGNL, OUTPUT);
-  digitalWrite(POWER2_SGNL, 0);
+  pinMode(POWER_SGNL, OUTPUT);
+  digitalWrite(POWER_SGNL, 0);
 
   ledcSetup(0, 1000, 14);
   ledcAttachPin(PWM1_SGNL, 0);
@@ -45,11 +53,18 @@ void setup() {
   ledcWrite(1, 0);
 }
 
-void loop() {
+void loop() { 
+
+  if(power_state){
+    if(millis() - power_timer >= max_time){
+      Serial.println("POWER:OFF");
+      digitalWrite(POWER_SGNL, LOW);
+      power_state = false;
+    }
+  }
 
   if(laser1Active){
-    if(millis() - laser1Change >= laser1Time || !digitalRead(DOOR_INPUT)){
-      digitalWrite(POWER1_SGNL, LOW);
+    if(millis() - laser1Change >= laser1Time || digitalRead(DOOR_INPUT)){
       laser1Active = false;
       ledcWrite(0, 0);
       Serial.println("TRIGG:L1:END");
@@ -57,8 +72,7 @@ void loop() {
   }
 
   if(laser2Active) { 
-    if(millis() - laser2Change >= laser2Time || !digitalRead(DOOR_INPUT)){
-      digitalWrite(POWER2_SGNL, LOW);
+    if(millis() - laser2Change >= laser2Time || digitalRead(DOOR_INPUT)){
       laser2Active = false;
       ledcWrite(1, 0);
       Serial.println("TRIGG:L2:END");
@@ -67,7 +81,7 @@ void loop() {
 
   while(Serial.available()>0){
     char inChar = (char) Serial.read();
-    if(inChar == '\n'){
+    if(inChar == '#'){
       _isStringComplete = true;
       break;
     }
@@ -85,7 +99,10 @@ void loop() {
       _receivedString  = _receivedString.substring(0, _receivedString.indexOf(" "));
       Serial.println("'" + _receivedString + "'");
     }
-    if(_receivedString == "SER:TEST"){
+    if(_receivedString == "DOOR:STATE?"){
+      Serial.println((String) "DOOR:" + digitalRead(DOOR_INPUT));
+    }
+    else if(_receivedString == "SER:TEST"){
       Serial.println("SER:OK");
     }
     else if(_receivedString == "ESP:RESET"){
@@ -93,8 +110,14 @@ void loop() {
       ESP.restart();
     }
     else if(_receivedString == "TRIGG:L1"){
-      if(digitalRead(DOOR_INPUT)){
-        digitalWrite(POWER1_SGNL, HIGH);
+      if(!digitalRead(DOOR_INPUT)){
+        if(!power_state){
+          digitalWrite(POWER_SGNL, HIGH);
+          power_timer = millis();
+          power_state = true;
+        } else{
+          power_timer = millis();
+        }
         Serial.println("TRIGG:L1:START");
         laser1Active = true;
         laser1Change = millis();
@@ -105,8 +128,14 @@ void loop() {
       }
     }
     else if(_receivedString == "TRIGG:L2"){
-      if(digitalRead(DOOR_INPUT)){
-        digitalWrite(POWER2_SGNL, HIGH);
+      if(!digitalRead(DOOR_INPUT)){
+        if(!power_state){
+          digitalWrite(POWER_SGNL, HIGH);
+          power_timer = millis();
+          power_state = true;
+        } else {
+          power_timer = millis();
+        }
         Serial.println("TRIGG:L2:START");
         laser2Active = true;
         laser2Change = millis();

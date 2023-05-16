@@ -16,9 +16,8 @@
 
 // Pin definitions.
 #define PWM1_SGNL 0
-#define POWER1_SGNL 4
+#define POWER_SGNL 4
 #define PWM2_SGNL 1
-#define POWER2_SGNL 5
 
 #define DOOR_INPUT 8
 
